@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Track & Trace — Factory Portal</title>
+  <link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">TR</div><div><strong>Track & Trace</strong><small>Factory operations</small></div></div>
+      <button class="workspace" id="workspaceToggle"><small>Workspace</small><strong>Company Portal</strong></button>
+      <nav class="nav">
+        <div class="nav-group"><button class="nav-title" data-toggle="operations">Operations</button><div class="nav-items" id="operations">
+          <button class="nav-item active" data-view="dashboard"><span class="dot"></span><span>Dashboard</span></button>
+          <button class="nav-item" data-view="materials"><span class="dot"></span><span>Materials &amp; recipes</span></button>
+          <button class="nav-item" data-view="workOrders"><span class="dot"></span><span>Batches &amp; work orders</span></button>
+          <button class="nav-item nav-child" data-view="serialization"><span class="dot"></span><span>Serialization</span></button>
+          <button class="nav-item nav-child" data-view="aggregation"><span class="dot"></span><span>Aggregation</span></button>
+          <button class="nav-item" data-view="warehouse"><span class="dot"></span><span>Warehouse</span></button>
+        </div></div>
+        <div class="nav-group"><button class="nav-title" data-toggle="control">Control</button><div class="nav-items" id="control">
+          <button class="nav-item" data-view="alarms"><span class="dot"></span><span>Alarms &amp; incidents</span></button>
+          <button class="nav-item nav-child" data-view="maintenance"><span class="dot"></span><span>Maintenance requests</span></button>
+          <button class="nav-item" data-view="trace"><span class="dot"></span><span>Trace a pack</span></button>
+        </div></div>
+        <div class="nav-group"><button class="nav-title" data-toggle="admin">Administration</button><div class="nav-items" id="admin"><button class="nav-item" data-view="users"><span class="dot"></span><span>Users &amp; roles</span></button><button class="nav-item" data-view="machines"><span class="dot"></span><span>Sites &amp; machines</span></button></div></div>
+      </nav>
+      <div class="side-note">Prototype · local data<br>Company factory portal</div>
+    </aside>
+    <main class="main"><header class="topbar"><div class="crumb">Track &amp; Trace / <strong id="crumb">Dashboard</strong></div><div class="top-actions"><span class="env">Prototype · local data</span><span class="user">Ahmed Eslam</span><span class="avatar">AE</span></div></header><section class="content" id="content"></section></main>
+  </div>
+  <div id="modalRoot"></div><div id="drawerRoot"></div><div class="toast" id="toast"></div>
+  <script src="../factory-core.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
