@@ -54,11 +54,16 @@
   function generateSerials(workOrder, options = {}) {
     assert(workOrder && [STATUS.DRAFT, STATUS.APPROVED].includes(workOrder.status), "Serials can only be generated for an approved or draft Work Order.");
     const startAt = Number.isInteger(options.startAt) ? options.startAt : 1;
-    const width = Math.max(8, String(workOrder.quantity + startAt - 1).length);
-    workOrder.serials = Array.from({ length: workOrder.quantity }, (_, index) => ({ serial: String(startAt + index).padStart(width, "0"), gtin: workOrder.gtin, batch: workOrder.batch, expiryDate: workOrder.expiryDate, sourceGln: workOrder.sourceGln, status: "generated", parentId: null }));
+    const requested = workOrder.quantity;
+    const maxRows = Number.isInteger(options.maxRows) && options.maxRows > 0 ? options.maxRows : requested;
+    const sampleSize = Math.min(requested, maxRows);
+    const width = Math.max(8, String(requested + startAt - 1).length);
+    workOrder.serialCount = requested;
+    workOrder.serials = Array.from({ length: sampleSize }, (_, index) => ({ serial: String(startAt + index).padStart(width, "0"), gtin: workOrder.gtin, batch: workOrder.batch, expiryDate: workOrder.expiryDate, sourceGln: workOrder.sourceGln, status: "generated", parentId: null }));
+    workOrder.serialSummary = { generated: requested, accepted: 0, rejected: 0, sampledRows: sampleSize };
     workOrder.status = STATUS.SERIALS_GENERATED;
     workOrder.updatedAt = now();
-    workOrder.events.push({ type: "serials_generated", count: workOrder.serials.length, at: now() });
+    workOrder.events.push({ type: "serials_generated", count: requested, sampledRows: sampleSize, at: now() });
     return workOrder;
   }
 
@@ -66,7 +71,8 @@
     assert(workOrder && workOrder.serials.length, "Generate serials before creating machine XML.");
     assert(![STATUS.CLOSED, STATUS.SUBMITTED].includes(workOrder.status), "This Work Order is closed or already submitted.");
     const version = workOrder.machineFiles.filter((file) => file.type === "serialization_machine_xml").length + 1;
-    const body = [`<workOrder id="${workOrder.id}">`, `  <gtin>${workOrder.gtin}</gtin>`, `  <batch>${workOrder.batch}</batch>`, `  <quantity>${workOrder.quantity}</quantity>`, `  <manufacturingDate>${workOrder.manufacturingDate}</manufacturingDate>`, `  <expiryDate>${workOrder.expiryDate}</expiryDate>`, "  <serials>", ...workOrder.serials.map((row) => `    <serial>${row.serial}</serial>`), "  </serials>", "</workOrder>"].join("\n");
+    const omitted = Math.max(0, (workOrder.serialCount || workOrder.quantity) - workOrder.serials.length);
+    const body = [`<workOrder id="${workOrder.id}">`, `  <gtin>${workOrder.gtin}</gtin>`, `  <batch>${workOrder.batch}</batch>`, `  <quantity>${workOrder.quantity}</quantity>`, `  <manufacturingDate>${workOrder.manufacturingDate}</manufacturingDate>`, `  <expiryDate>${workOrder.expiryDate}</expiryDate>`, "  <serials>", ...workOrder.serials.map((row) => `    <serial>${row.serial}</serial>`), ...(omitted ? [`    <!-- ${omitted} additional serials are represented by this review sample -->`] : []), "  </serials>", "</workOrder>"].join("\n");
     const file = { id: id("FILE"), type: "serialization_machine_xml", name: `${workOrder.id}-serialization-v${version}.xml`, version, content: body, status: "pending_qa", createdAt: now() };
     workOrder.machineFiles.push(file);
     workOrder.status = STATUS.PENDING_QA;
@@ -94,8 +100,11 @@
   function createMachineResult(workOrder, options = {}) {
     assert(workOrder && workOrder.serials.length, "Machine XML must exist before receiving a result.");
     const rejectCount = Number.isInteger(options.rejectCount) ? options.rejectCount : 0;
-    workOrder.serials.forEach((row, index) => { row.status = index >= workOrder.serials.length - rejectCount ? "rejected" : "accepted"; row.rejectReason = row.status === "rejected" ? (options.reason || "Unreadable code") : ""; });
-    const result = { id: id("MRES"), type: "serialization_result", status: "pending_qa", requested: workOrder.quantity, accepted: workOrder.serials.filter((row) => row.status === "accepted").length, rejected: workOrder.serials.filter((row) => row.status === "rejected").length, rows: workOrder.serials.map((row) => ({ ...row })), receivedAt: now() };
+    const logicalRejectCount = Math.min(Math.max(0, rejectCount), workOrder.quantity);
+    const sampleRejectCount = Math.min(logicalRejectCount, workOrder.serials.length);
+    workOrder.serials.forEach((row, index) => { row.status = index >= workOrder.serials.length - sampleRejectCount ? "rejected" : "accepted"; row.rejectReason = row.status === "rejected" ? (options.reason || "Unreadable code") : ""; });
+    workOrder.serialSummary = { generated: 0, accepted: workOrder.quantity - logicalRejectCount, rejected: logicalRejectCount, sampledRows: workOrder.serials.length };
+    const result = { id: id("MRES"), type: "serialization_result", status: "pending_qa", requested: workOrder.quantity, accepted: workOrder.serialSummary.accepted, rejected: logicalRejectCount, rows: workOrder.serials.map((row) => ({ ...row })), sampledRows: workOrder.serials.length, receivedAt: now() };
     workOrder.machineFiles.push(result);
     workOrder.status = STATUS.SERIALIZATION_COMPLETE;
     workOrder.events.push({ type: "serialization_result_received", resultId: result.id, accepted: result.accepted, rejected: result.rejected, at: now() });
