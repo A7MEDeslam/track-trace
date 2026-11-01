@@ -194,7 +194,7 @@ const warehouseDemoInventory=()=>db.workOrders.slice(0,6).flatMap((w,i)=>{
     status:i===1&&j===0?"Partially shipped":"In warehouse",last:i===1&&j===0?"Partial outbound":"Inbound",date:"2026-10-25",productionDate:w.manufacturingDate||"2026-10-25",expiryDate:w.expiryDate||"2029-09-30"
   }));
 });
-const warehouseDemoMovements=()=>warehouseDemoInventory().slice(0,8).flatMap((item,i)=>{
+const warehouseDemoMovements=(inventory=warehouseDemoInventory())=>inventory.slice(0,8).flatMap((item,i)=>{
   const w=item.workOrder,base={workOrder:w.id,batch:w.batch,serial:item.id,product:w.productName,productionDate:w.manufacturingDate||"2026-10-25",expiryDate:w.expiryDate||"2029-09-30"};
   return i%3===1?[
     {...base,type:"Inbound",from:"Production",to:"Finished goods",quantity:1,at:"25/10/2026, 09:14",date:"2026-10-25",user:"Warehouse Operator",status:"Recorded"},
@@ -202,7 +202,12 @@ const warehouseDemoMovements=()=>warehouseDemoInventory().slice(0,8).flatMap((it
     {...base,type:"Partial outbound",from:"Dispatch staging",to:"Customer · Cairo",quantity:12,children:Array.from({length:12},(_,j)=>`CAR-${w.batch}-${String(j+1).padStart(4,"0")}`),at:"25/10/2026, 11:26",date:"2026-10-25",user:"Dispatch scanner",status:"Recorded"}
   ]:[{...base,type:"Inbound",from:"Production",to:item.location,quantity:1,at:"25/10/2026, 08:42",date:"2026-10-25",user:"Warehouse Operator",status:"Recorded"}];
 });
-const warehouseData=()=>({inventory:warehouseDemoInventory(),movements:warehouseDemoMovements()});
+// Build the demo warehouse snapshot once. Rendering and mutation observers can ask for
+// warehouse data several times during one interaction; regenerating it repeatedly also
+// recalculated the full serial aggregation tree and could make the page unresponsive.
+const warehouseSnapshotInventory=warehouseDemoInventory();
+const warehouseSnapshot={inventory:warehouseSnapshotInventory,movements:warehouseDemoMovements(warehouseSnapshotInventory)};
+const warehouseData=()=>warehouseSnapshot;
 db.warehouseTab="current";db.warehousePage=0;db.warehousePageSize=10;db.warehouseDateFrom="";db.warehouseDateTo="";db.warehouseExpiryDate="";
 const warehouseFilteredRows=()=>{const {inventory,movements}=warehouseData(),tab=db.warehouseTab||"current",q=(document.querySelector("#warehouseSearch")?.value||"").toLowerCase().trim(),loc=document.querySelector("#warehouseLocation")?.value||"",from=document.querySelector("#warehouseDateFrom")?.value||"",to=document.querySelector("#warehouseDateTo")?.value||"",expiry=document.querySelector("#warehouseExpiryDate")?.value||"",inRange=x=>(!from||((x.productionDate||x.date)>=from))&&(!to||((x.productionDate||x.date)<=to))&&(!expiry||x.expiryDate===expiry);if(tab==="outbound"){return movements.filter(x=>x.type!=="Inbound").filter(x=>(!q||[x.serial,x.workOrder,x.batch,x.to,x.type].join(" ").toLowerCase().includes(q))&&(!loc||x.to===loc)&&inRange(x))}return inventory.filter(x=>(!q||[x.id,x.workOrder.id,x.workOrder.batch,x.location,x.status].join(" ").toLowerCase().includes(q))&&(!loc||x.location===loc)&&inRange(x))};
 const warehousePager=total=>{const pages=Math.max(1,Math.ceil(total/db.warehousePageSize));db.warehousePage=Math.min(Math.max(0,db.warehousePage),pages-1);const start=total?db.warehousePage*db.warehousePageSize+1:0,end=Math.min(total,(db.warehousePage+1)*db.warehousePageSize),nums=Array.from({length:pages},(_,i)=>`<button class="btn small ${i===db.warehousePage?"active":""}" data-action="warehousePage" data-page="${i}">${i+1}</button>`).join("");return `<div class="pagination"><span class="pagination-meta">${total?`Showing ${start}–${end} of ${total}`:"No matching records"}</span><div class="pagination-pages"><button class="btn small" data-action="warehousePrev" ${db.warehousePage===0?"disabled":""}>Previous</button>${nums}<button class="btn small" data-action="warehouseNext" ${db.warehousePage>=pages-1?"disabled":""}>Next</button></div></div>`};
